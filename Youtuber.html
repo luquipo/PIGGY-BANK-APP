@@ -1,745 +1,643 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TubeTycoon - YouTuber Simulator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            user-select: none;
-        }
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  serverTimestamp,
+  query, 
+  orderBy 
+} from 'firebase/firestore';
+import { 
+  PiggyBank, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  History, 
+  Trophy, 
+  Moon, 
+  Sun, 
+  TrendingUp, 
+  Target,
+  Hammer,
+  X,
+  Check,
+  Wallet,
+  ArrowLeft
+} from 'lucide-react';
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
+// --- Confetti Utility (Simplified) ---
+const fireConfetti = () => {
+  const count = 200;
+  const defaults = { origin: { y: 0.7 } };
 
-        .animate-pop {
-            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
+  function fire(particleRatio, opts) {
+    if (window.confetti) {
+        window.confetti({ ...defaults, ...opts, particleCount: Math.floor(count * particleRatio) });
+    }
+  }
 
-        @keyframes pop {
-            0% { transform: scale(0.9); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
+  if (window.confetti) {
+      fire(0.25, { spread: 26, startVelocity: 55 });
+      fire(0.2, { spread: 60 });
+      fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+      fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+      fire(0.1, { spread: 120, startVelocity: 45 });
+  }
+};
 
-        .chat-message {
-            animation: slideIn 0.2s ease-out;
-        }
+// --- Firebase Initialization ---
+const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = window.__app_id || 'default-app-id';
 
-        @keyframes slideIn {
-            from { transform: translateX(-10px); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
+// --- Components ---
 
-        .stat-card {
-            transition: transform 0.2s;
-        }
-        .stat-card:hover {
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body class="bg-gray-100 text-gray-800 h-screen flex flex-col overflow-hidden">
+const MotivationalMessage = ({ type }) => {
+  const messages = {
+    deposit: [
+      "Ótimo trabalho! 🚀",
+      "Cada centavo conta! 💰",
+      "O futuro agradece! 🌱",
+      "Mais um passo rumo ao sonho! ✨",
+      "Poupar é poder! 💪"
+    ],
+    broken: [
+      "Aproveite sua conquista! 🎉",
+      "Recomeçar faz parte! 🔄",
+      "Missão cumprida! 🏆"
+    ],
+    create: [
+      "Novo objetivo, novo foco! 🎯",
+      "Vamos encher esse cofrinho! 🐷"
+    ]
+  };
+  
+  const list = messages[type] || messages.deposit;
+  const randomMsg = list[Math.floor(Math.random() * list.length)];
+  
+  return (
+    <div className="animate-fade-in-up text-center py-2 px-4 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full text-sm font-medium shadow-sm mt-4 mx-4">
+      {randomMsg}
+    </div>
+  );
+};
 
-    <!-- TOP BAR -->
-    <header class="bg-white border-b border-gray-200 shadow-sm z-10 flex-none">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                    <i class="fa-brands fa-youtube"></i>
-                </div>
-                <div>
-                    <h1 id="channelNameDisplay" class="font-bold text-lg leading-tight">New Channel</h1>
-                    <div class="text-xs text-gray-500">Day <span id="dayDisplay">1</span></div>
-                </div>
-            </div>
+const CoinAnimation = ({ onComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 1000);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
 
-            <!-- Stats Header -->
-            <div class="flex gap-4 md:gap-8 text-sm md:text-base">
-                <div class="flex flex-col items-center">
-                    <span class="text-gray-500 text-xs uppercase font-bold">Subs</span>
-                    <span id="subDisplay" class="font-bold text-red-600">0</span>
-                </div>
-                <div class="flex flex-col items-center">
-                    <span class="text-gray-500 text-xs uppercase font-bold">Money</span>
-                    <span id="moneyDisplay" class="font-bold text-green-600">$0</span>
-                </div>
-                <div class="flex flex-col items-center">
-                    <span class="text-gray-500 text-xs uppercase font-bold">Energy</span>
-                    <div class="w-24 h-4 bg-gray-200 rounded-full mt-1 overflow-hidden relative border border-gray-300">
-                        <div id="energyBar" class="h-full bg-blue-500 transition-all duration-500" style="width: 100%;"></div>
-                        <span id="energyText" class="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold shadow-black drop-shadow-md">100%</span>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50 overflow-hidden">
+      <div className="animate-drop-coin text-yellow-400 text-7xl drop-shadow-2xl filter drop-shadow-lg">
+        🪙
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [piggies, setPiggies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [view, setView] = useState('dashboard'); // 'dashboard', 'create', 'details'
+  const [selectedPiggyId, setSelectedPiggyId] = useState(null);
+  
+  const selectedPiggy = piggies.find(p => p.id === selectedPiggyId);
+  
+  // Form States
+  const [newPiggyName, setNewPiggyName] = useState('');
+  const [newPiggyGoal, setNewPiggyGoal] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
+  
+  // UX States
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [showCoinAnim, setShowCoinAnim] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [showBreakModal, setShowBreakModal] = useState(false);
+
+  // --- Auth & Data Loading ---
+  useEffect(() => {
+    const initAuth = async () => {
+      if (window.__initial_auth_token) {
+        await signInWithCustomToken(auth, window.__initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    
+    // Load confetti script
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      unsubscribe();
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const collectionRef = collection(db, 'artifacts', appId, 'users', user.uid, 'piggybanks');
+    const unsubscribe = onSnapshot(collectionRef, (snapshot) => {
+      const loadedPiggies = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      loadedPiggies.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPiggies(loadedPiggies);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching piggies:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // --- Actions ---
+
+  const createPiggy = async (e) => {
+    e.preventDefault();
+    if (!newPiggyName || !newPiggyGoal) return;
+
+    try {
+      await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'piggybanks'), {
+        name: newPiggyName,
+        goal: parseFloat(newPiggyGoal),
+        current: 0,
+        createdAt: serverTimestamp(),
+        color: ['bg-pink-500', 'bg-blue-500', 'bg-purple-500', 'bg-teal-500', 'bg-orange-500'][Math.floor(Math.random() * 5)],
+        history: []
+      });
+      setNewPiggyName('');
+      setNewPiggyGoal('');
+      setView('dashboard');
+      triggerMessage('create');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addMoney = async (amount) => {
+    if (!selectedPiggy) return;
+    setShowCoinAnim(true);
+    
+    const val = parseFloat(amount);
+    const newTotal = selectedPiggy.current + val;
+    const newEntry = {
+      date: new Date().toISOString(),
+      amount: val,
+      type: 'deposit'
+    };
+
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'piggybanks', selectedPiggy.id);
+      await updateDoc(docRef, {
+        current: newTotal,
+        history: [newEntry, ...(selectedPiggy.history || [])]
+      });
+      
+      triggerMessage('deposit');
+
+      if (newTotal >= selectedPiggy.goal && selectedPiggy.current < selectedPiggy.goal) {
+        fireConfetti();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const breakPiggy = async () => {
+    if (!selectedPiggy) return;
+    fireConfetti();
+    triggerMessage('broken');
+    
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'piggybanks', selectedPiggy.id);
+      await updateDoc(docRef, {
+        current: 0,
+        history: [{
+          date: new Date().toISOString(),
+          amount: -selectedPiggy.current,
+          type: 'withdraw'
+        }, ...(selectedPiggy.history || [])]
+      });
+      setShowBreakModal(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deletePiggy = async () => {
+     if (!selectedPiggy) return;
+     try {
+       await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'piggybanks', selectedPiggy.id));
+       setSelectedPiggyId(null);
+       setView('dashboard');
+     } catch(err) {
+       console.error(err);
+     }
+  };
+
+  const triggerMessage = (type) => {
+    setMessage(type);
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  // --- Views ---
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="animate-bounce text-5xl">🐷</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen w-full transition-colors duration-300 ${darkMode ? 'dark bg-slate-900 text-white' : 'bg-slate-50 text-slate-800'}`}>
+      
+      {/* Header - Sticky and Native Feel */}
+      <header className="px-4 py-3 flex justify-between items-center sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-30 border-b border-slate-200 dark:border-slate-800 shadow-sm safe-top">
+        <div className="flex items-center gap-2 active:opacity-70 transition-opacity cursor-pointer" onClick={() => { setView('dashboard'); setSelectedPiggyId(null); }}>
+          <div className="bg-pink-500 p-2 rounded-xl text-white shadow-pink-500/20 shadow-lg">
+            <PiggyBank size={24} strokeWidth={2.5} />
+          </div>
+          <h1 className="font-bold text-xl tracking-tight leading-none">Cofrinho<span className="text-pink-500">App</span></h1>
         </div>
-    </header>
+        <button 
+          onClick={() => setDarkMode(!darkMode)}
+          className="p-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 transition-colors touch-manipulation"
+        >
+          {darkMode ? <Sun size={22} /> : <Moon size={22} />}
+        </button>
+      </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="flex-1 flex overflow-hidden max-w-7xl mx-auto w-full">
+      {/* Main Container - Full Width on Mobile, Centered on Desktop */}
+      <main className="w-full max-w-md mx-auto pb-24 relative min-h-[calc(100vh-80px)]">
         
-        <!-- SIDEBAR NAVIGATION -->
-        <nav class="w-20 md:w-64 bg-white border-r border-gray-200 flex-none flex flex-col py-6 space-y-2">
-            <button onclick="switchTab('dashboard')" class="nav-btn active flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
-                <i class="fa-solid fa-chart-line text-xl group-hover:scale-110 transition-transform"></i>
-                <span class="hidden md:inline font-medium">Dashboard</span>
-            </button>
-            <button onclick="switchTab('create')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
-                <i class="fa-solid fa-video text-xl group-hover:scale-110 transition-transform"></i>
-                <span class="hidden md:inline font-medium">Create Video</span>
-            </button>
-            <button onclick="switchTab('stream')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
-                <i class="fa-solid fa-tower-broadcast text-xl group-hover:scale-110 transition-transform"></i>
-                <span class="hidden md:inline font-medium">Livestream</span>
-            </button>
-            <button onclick="switchTab('shop')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
-                <i class="fa-solid fa-cart-shopping text-xl group-hover:scale-110 transition-transform"></i>
-                <span class="hidden md:inline font-medium">Shop</span>
-            </button>
-            
-            <div class="mt-auto px-6 pt-6 border-t border-gray-100">
-                <button onclick="sleep()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-bed"></i>
-                    <span class="hidden md:inline">Sleep (Next Day)</span>
+        {/* Floating Messages */}
+        {message && <MotivationalMessage type={message} />}
+
+        {/* Dashboard View */}
+        {view === 'dashboard' && (
+          <div className="p-4 space-y-6 animate-fade-in">
+            {/* Summary Card */}
+            <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-purple-700 rounded-3xl p-6 text-white shadow-xl shadow-purple-500/20 transform transition-transform active:scale-[0.98]">
+              <p className="opacity-90 text-sm font-medium mb-1">Total Economizado</p>
+              <h2 className="text-4xl font-extrabold tracking-tight">
+                {formatCurrency(piggies.reduce((acc, curr) => acc + (curr.current || 0), 0))}
+              </h2>
+              <div className="mt-4 flex gap-2">
+                <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 border border-white/10">
+                  <Trophy size={14} className="text-yellow-300" /> 
+                  {piggies.filter(p => p.current >= p.goal).length} Conquistados
+                </div>
+              </div>
+            </div>
+
+            {/* Piggy List */}
+            <div>
+              <div className="flex justify-between items-center mb-4 px-1">
+                <h3 className="font-bold text-lg text-slate-700 dark:text-slate-200">Meus Objetivos</h3>
+                <button 
+                  onClick={() => setView('create')}
+                  className="bg-pink-50 dark:bg-pink-900/30 text-pink-500 p-2.5 rounded-full active:bg-pink-100 transition-colors"
+                >
+                  <Plus size={24} strokeWidth={2.5} />
                 </button>
-            </div>
-        </nav>
+              </div>
 
-        <!-- CENTER PANEL -->
-        <section class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto relative" id="mainContainer">
-            
-            <!-- ALERTS -->
-            <div id="notificationArea" class="fixed top-20 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
-
-            <!-- DASHBOARD TAB -->
-            <div id="dashboard" class="tab-content block animate-pop">
-                <div class="mb-6 bg-gradient-to-r from-red-500 to-pink-600 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
-                    <i class="fa-brands fa-youtube absolute -right-6 -bottom-6 text-9xl opacity-20"></i>
-                    <h2 class="text-2xl font-bold mb-1">Current Trend: <span id="trendDisplay" class="underline decoration-wavy decoration-white/50">Gaming</span></h2>
-                    <p class="text-white/80 text-sm">Create videos matching the trend for +50% views!</p>
+              {piggies.length === 0 ? (
+                <div className="text-center py-12 px-4 opacity-60 bg-white dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 mx-1">
+                  <PiggyBank size={56} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                  <p className="text-slate-500 mb-4">Você ainda não tem cofrinhos.</p>
+                  <button onClick={() => setView('create')} className="bg-pink-500 text-white px-6 py-3 rounded-full font-bold shadow-lg shadow-pink-500/30 active:scale-95 transition-transform">
+                    Criar meu primeiro!
+                  </button>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Total Views</div>
-                        <div id="totalViewsDisplay" class="text-2xl font-bold text-gray-800">0</div>
-                    </div>
-                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Total Videos</div>
-                        <div id="videoCountDisplay" class="text-2xl font-bold text-gray-800">0</div>
-                    </div>
-                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Avg Quality</div>
-                        <div id="qualityDisplay" class="text-2xl font-bold text-blue-600">1080p</div>
-                    </div>
-                </div>
-
-                <h3 class="font-bold text-xl mb-4 text-gray-700">Recent Videos</h3>
-                <div id="videoHistory" class="space-y-3">
-                    <!-- Video items injected here -->
-                    <div class="text-center text-gray-400 py-10">No videos created yet.</div>
-                </div>
-            </div>
-
-            <!-- CREATE VIDEO TAB -->
-            <div id="create" class="tab-content hidden animate-pop">
-                <h2 class="text-2xl font-bold mb-6">Create New Content</h2>
-                
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-2xl mx-auto">
-                    <!-- Step 1: Category -->
-                    <div class="mb-6">
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Select Topic</label>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <button onclick="selectCategory('Gaming')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
-                                <i class="fa-solid fa-gamepad text-2xl mb-2 text-gray-600"></i>
-                                <div class="text-sm font-medium">Gaming</div>
-                            </button>
-                            <button onclick="selectCategory('Vlog')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
-                                <i class="fa-solid fa-camera text-2xl mb-2 text-gray-600"></i>
-                                <div class="text-sm font-medium">Vlog</div>
-                            </button>
-                            <button onclick="selectCategory('Tech')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
-                                <i class="fa-solid fa-microchip text-2xl mb-2 text-gray-600"></i>
-                                <div class="text-sm font-medium">Tech</div>
-                            </button>
-                            <button onclick="selectCategory('Music')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
-                                <i class="fa-solid fa-music text-2xl mb-2 text-gray-600"></i>
-                                <div class="text-sm font-medium">Music</div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Editing Effort -->
-                    <div class="mb-8">
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Editing Effort (Costs Energy)</label>
-                        <input type="range" id="editingEffort" min="1" max="5" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600">
-                        <div class="flex justify-between text-xs text-gray-500 mt-2">
-                            <span>Quick Cut (10 Energy)</span>
-                            <span>Masterpiece (50 Energy)</span>
-                        </div>
-                    </div>
-
-                    <button onclick="publishVideo()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg flex items-center justify-center gap-3">
-                        <i class="fa-solid fa-upload"></i> Upload Video
-                    </button>
-                </div>
-            </div>
-
-            <!-- STREAM TAB -->
-            <div id="stream" class="tab-content hidden animate-pop h-full flex flex-col">
-                <div id="streamSetup" class="flex flex-col items-center justify-center h-full">
-                    <div class="text-center max-w-md">
-                        <div class="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
-                            <i class="fa-solid fa-satellite-dish"></i>
-                        </div>
-                        <h2 class="text-2xl font-bold mb-2">Ready to go Live?</h2>
-                        <p class="text-gray-500 mb-8">Streaming drains energy continuously but earns money and subscribers in real-time. Don't let your energy hit 0!</p>
-                        <button onclick="startStream()" class="px-8 py-3 bg-red-600 text-white rounded-full font-bold shadow-lg hover:bg-red-700 transition-transform hover:scale-105">
-                            Start Stream
-                        </button>
-                    </div>
-                </div>
-
-                <div id="streamActive" class="hidden h-full flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl relative border-4 border-gray-800">
-                    <!-- Stream Screen -->
-                    <div class="flex-1 bg-gray-800 relative flex items-center justify-center">
-                        <div class="absolute top-4 left-4 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded animate-pulse">LIVE</div>
-                        <div class="absolute top-4 right-4 bg-black/50 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-2">
-                            <i class="fa-regular fa-eye"></i> <span id="liveViewers">0</span>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {piggies.map(piggy => {
+                    const percent = Math.min(100, (piggy.current / piggy.goal) * 100);
+                    return (
+                      <div 
+                        key={piggy.id}
+                        onClick={() => { setSelectedPiggyId(piggy.id); setView('details'); }}
+                        className="bg-white dark:bg-slate-800 p-5 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700/50 cursor-pointer active:scale-[0.98] transition-all touch-manipulation"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`w-12 h-12 rounded-2xl ${piggy.color || 'bg-pink-500'} flex items-center justify-center text-white shadow-md transform -rotate-3`}>
+                              <PiggyBank size={24} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-lg leading-tight">{piggy.name}</h4>
+                              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mt-0.5">Meta: {formatCurrency(piggy.goal)}</p>
+                            </div>
+                          </div>
+                          <span className="font-bold text-lg text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-700/50 px-3 py-1 rounded-lg">
+                            {formatCurrency(piggy.current)}
+                          </span>
                         </div>
                         
-                        <div class="text-center">
-                            <i class="fa-solid fa-gamepad text-6xl text-gray-700 mb-4"></i>
-                            <div class="text-gray-500 text-sm">Streaming Gameplay...</div>
-                            <div id="streamMoneyPopup" class="text-green-400 font-bold text-xl h-8"></div>
+                        <div className="relative h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`absolute top-0 left-0 h-full ${percent >= 100 ? 'bg-green-500' : 'bg-pink-500'} transition-all duration-1000 ease-out`}
+                            style={{ width: `${percent}%` }}
+                          />
                         </div>
-
-                        <!-- Stream Controls -->
-                        <div class="absolute bottom-6 left-0 right-0 flex justify-center gap-4">
-                            <button onclick="streamInteraction('chat')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md transition-transform active:scale-95">Read Chat</button>
-                            <button onclick="streamInteraction('game')" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md transition-transform active:scale-95">Focus Game</button>
-                            <button onclick="endStream()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md">End Stream</button>
+                        <div className="flex justify-between items-center mt-2">
+                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Progresso</span>
+                           <span className={`text-xs font-bold ${percent >= 100 ? 'text-green-500' : 'text-pink-500'}`}>{Math.round(percent)}%</span>
                         </div>
-                    </div>
-
-                    <!-- Chat Box -->
-                    <div class="h-48 bg-white flex flex-col">
-                        <div class="p-2 border-b text-xs font-bold text-gray-500 bg-gray-50">TOP CHAT</div>
-                        <div id="chatBox" class="flex-1 overflow-y-auto p-2 space-y-2 text-sm">
-                            <!-- Chat messages -->
-                        </div>
-                    </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Create View */}
+        {view === 'create' && (
+          <div className="p-4 animate-fade-in">
+             <div className="flex items-center mb-8">
+              <button onClick={() => setView('dashboard')} className="mr-4 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full active:scale-90 transition-transform">
+                <ArrowLeft size={24} />
+              </button>
+              <h2 className="text-2xl font-bold">Novo Cofrinho</h2>
+            </div>
+            
+            <form onSubmit={createPiggy} className="space-y-6">
+              <div>
+                <label className="block text-sm font-bold mb-2 text-slate-500 uppercase tracking-wide px-1">Nome do Objetivo</label>
+                <input 
+                  type="text" 
+                  value={newPiggyName}
+                  onChange={e => setNewPiggyName(e.target.value)}
+                  placeholder="Ex: Bicicleta Nova"
+                  className="w-full p-4 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-pink-500 focus:ring-4 focus:ring-pink-500/10 outline-none text-xl font-medium transition-all"
+                  autoFocus
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold mb-2 text-slate-500 uppercase tracking-wide px-1">Valor da Meta (R$)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  value={newPiggyGoal}
+                  onChange={e => setNewPiggyGoal(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full p-4 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-pink-500 focus:ring-4 focus:ring-pink-500/10 outline-none text-xl font-medium transition-all"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={!newPiggyName || !newPiggyGoal}
+                className="w-full bg-pink-500 text-white font-bold py-5 rounded-2xl shadow-xl shadow-pink-500/30 hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform active:scale-[0.98] text-lg mt-4"
+              >
+                Criar Cofrinho
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Detail View */}
+        {view === 'details' && selectedPiggy && (
+          <div className="p-4 animate-fade-in relative min-h-screen pb-20">
+            {showCoinAnim && <CoinAnimation onComplete={() => setShowCoinAnim(false)} />}
+            
+            <div className="flex items-center justify-between mb-6 sticky top-0 z-20">
+              <button onClick={() => setView('dashboard')} className="p-3 bg-white/50 dark:bg-slate-800/50 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-full active:scale-90 transition-transform">
+                <ArrowLeft size={24} />
+              </button>
+              <button onClick={() => setShowBreakModal(true)} className="text-red-500 bg-red-50 dark:bg-red-900/10 px-4 py-2 rounded-full text-xs font-bold border border-red-100 dark:border-red-900/50 flex items-center gap-1.5 active:bg-red-100 transition-colors">
+                <Hammer size={14} /> Quebrar
+              </button>
             </div>
 
-            <!-- SHOP TAB -->
-            <div id="shop" class="tab-content hidden animate-pop">
-                <h2 class="text-2xl font-bold mb-6">Equipment Shop</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    
-                    <!-- PC Upgrade -->
-                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="p-3 bg-blue-100 text-blue-600 rounded-lg">
-                                <i class="fa-solid fa-computer text-xl"></i>
-                            </div>
-                            <span id="pcLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
-                        </div>
-                        <h3 class="font-bold text-lg">Workstation</h3>
-                        <p class="text-sm text-gray-500 mb-4">Improves editing speed and video base quality.</p>
-                        <button onclick="buyUpgrade('pc')" id="btn-pc" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
-                            Buy $<span>100</span>
-                        </button>
-                    </div>
-
-                    <!-- Camera Upgrade -->
-                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="p-3 bg-green-100 text-green-600 rounded-lg">
-                                <i class="fa-solid fa-camera text-xl"></i>
-                            </div>
-                            <!-- FIXED ID HERE: changed from camLvl to cameraLvl -->
-                            <span id="cameraLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
-                        </div>
-                        <h3 class="font-bold text-lg">Camera</h3>
-                        <p class="text-sm text-gray-500 mb-4">Increases subscriber gain rate per video.</p>
-                        <button onclick="buyUpgrade('camera')" id="btn-camera" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
-                            Buy $<span>150</span>
-                        </button>
-                    </div>
-
-                    <!-- Mic Upgrade -->
-                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="p-3 bg-purple-100 text-purple-600 rounded-lg">
-                                <i class="fa-solid fa-microphone text-xl"></i>
-                            </div>
-                            <span id="micLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
-                        </div>
-                        <h3 class="font-bold text-lg">Microphone</h3>
-                        <p class="text-sm text-gray-500 mb-4">Boosts audience retention and likes.</p>
-                        <button onclick="buyUpgrade('mic')" id="btn-mic" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
-                            Buy $<span>120</span>
-                        </button>
-                    </div>
-
-                </div>
-
-                <div class="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                    <i class="fa-solid fa-lightbulb mr-2"></i> Tip: Upgrading equipment increases your upkeep costs but drastically improves your video performance!
-                </div>
+            {/* Main Piggy Display */}
+            <div className="text-center mb-8 relative">
+              <div 
+                className={`w-36 h-36 mx-auto ${selectedPiggy.color || 'bg-pink-500'} rounded-full flex items-center justify-center text-white shadow-2xl shadow-pink-500/20 mb-5 transition-transform duration-300 ${showCoinAnim ? 'scale-110' : ''}`}
+              >
+                <PiggyBank size={72} strokeWidth={1.5} />
+              </div>
+              <h2 className="text-2xl font-bold leading-tight px-4">{selectedPiggy.name}</h2>
+              <p className="text-slate-500 font-medium mt-1">Meta: {formatCurrency(selectedPiggy.goal)}</p>
+              
+              <div className="mt-5 bg-slate-50 dark:bg-slate-800 inline-block px-6 py-3 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                <span className="text-4xl font-black tracking-tighter text-slate-800 dark:text-white block">
+                  {formatCurrency(selectedPiggy.current)}
+                </span>
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Saldo Atual</span>
+              </div>
             </div>
 
-        </section>
-    </main>
+            {/* Add Money Grid */}
+            <h3 className="font-bold text-sm text-slate-400 uppercase tracking-wider mb-3 px-1">Adicionar Dinheiro</h3>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {[1, 2, 5, 10, 20, 50].map(val => (
+                <button 
+                  key={val}
+                  onClick={() => addMoney(val)}
+                  className="bg-white dark:bg-slate-800 border-b-4 border-slate-200 dark:border-slate-700 active:border-b-0 active:translate-y-1 py-4 rounded-2xl font-bold text-slate-600 dark:text-slate-300 active:bg-pink-50 dark:active:bg-pink-900/20 shadow-sm transition-all text-lg touch-manipulation"
+                >
+                  R${val}
+                </button>
+              ))}
+            </div>
 
-    <!-- Modal for Welcome/Name Input -->
-    <div id="welcomeModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
-        <div class="bg-white p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
-            <i class="fa-brands fa-youtube text-6xl text-red-600 mb-4"></i>
-            <h2 class="text-3xl font-bold mb-2">Start Your Career</h2>
-            <p class="text-gray-500 mb-6">What will your channel be called?</p>
-            <input type="text" id="channelNameInput" placeholder="Enter Channel Name..." class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 text-center text-lg font-semibold focus:border-red-500 outline-none" maxlength="20">
-            <button onclick="startGame()" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-red-700 transition-colors">Create Channel</button>
+            {/* Custom Amount */}
+            <form 
+              onSubmit={(e) => { e.preventDefault(); if(depositAmount) { addMoney(depositAmount); setDepositAmount(''); } }}
+              className="flex gap-3 mb-8"
+            >
+              <div className="relative flex-1">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
+                <input 
+                  type="number" 
+                  inputMode="decimal"
+                  pattern="[0-9]*"
+                  placeholder="Outro valor..." 
+                  value={depositAmount}
+                  onChange={e => setDepositAmount(e.target.value)}
+                  className="w-full pl-10 pr-4 py-4 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 focus:border-pink-500 outline-none text-lg font-medium"
+                />
+              </div>
+              <button 
+                type="submit"
+                disabled={!depositAmount}
+                className="bg-slate-800 dark:bg-white text-white dark:text-slate-900 w-16 rounded-2xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center active:scale-95"
+              >
+                <Plus size={24} />
+              </button>
+            </form>
+
+            {/* History */}
+            <div className="bg-slate-100/50 dark:bg-slate-800/30 rounded-3xl p-5 border border-slate-200/50 dark:border-slate-700/50">
+              <h3 className="font-bold text-sm text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <History size={16} /> Últimos Movimentos
+              </h3>
+              <div className="space-y-4 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                {selectedPiggy.history && selectedPiggy.history.length > 0 ? (
+                  selectedPiggy.history.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-sm">
+                      <div className="flex items-center gap-3">
+                         <div className={`w-8 h-8 flex items-center justify-center rounded-full ${item.type === 'deposit' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
+                           {item.type === 'deposit' ? <TrendingUp size={14} /> : <Trash2 size={14} />}
+                         </div>
+                         <div className="flex flex-col">
+                           <span className="font-medium text-slate-700 dark:text-slate-300">
+                             {item.type === 'deposit' ? 'Depósito' : 'Quebra de cofrinho'}
+                           </span>
+                           <span className="text-xs text-slate-400">
+                             {new Date(item.date).toLocaleDateString('pt-BR')}
+                           </span>
+                         </div>
+                      </div>
+                      <span className={`font-bold text-base ${item.type === 'deposit' ? 'text-green-500' : 'text-red-500'}`}>
+                        {item.type === 'deposit' ? '+' : ''}{formatCurrency(item.amount)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-slate-400 text-sm">Nenhuma atividade recente.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* Break Piggy Modal - Mobile Optimized */}
+      {showBreakModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full sm:max-w-sm sm:rounded-3xl rounded-t-3xl p-6 shadow-2xl transform transition-all slide-up-mobile">
+            <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6 sm:hidden" />
+            
+            <div className="bg-red-100 dark:bg-red-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+              <Hammer size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-center mb-2">Quebrar o Cofrinho?</h3>
+            <p className="text-center text-slate-500 dark:text-slate-400 mb-8 leading-relaxed px-4">
+              Você vai retirar <strong className="text-slate-800 dark:text-white">{formatCurrency(selectedPiggy?.current)}</strong>. <br/>O valor voltará para zero.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-2">
+              <button 
+                onClick={() => setShowBreakModal(false)}
+                className="py-4 rounded-2xl font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors active:scale-95 text-slate-600 dark:text-slate-300"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={breakPiggy}
+                className="bg-red-500 text-white py-4 rounded-2xl font-bold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30 active:scale-95"
+              >
+                QUEBRAR!
+              </button>
+            </div>
+            <div className="mt-6 text-center pb-2">
+              <button onClick={() => { deletePiggy(); setShowBreakModal(false); }} className="text-xs text-red-400 font-medium hover:text-red-500 flex items-center justify-center gap-1 mx-auto py-2">
+                <Trash2 size={12} /> Excluir este cofrinho permanentemente
+              </button>
+            </div>
+          </div>
         </div>
-    </div>
+      )}
 
-    <script>
-        // --- GAME STATE ---
-        const gameState = {
-            name: "New Channel",
-            day: 1,
-            money: 100,
-            subs: 0,
-            totalViews: 0,
-            energy: 100,
-            videos: [],
-            trend: "Gaming",
-            equipment: {
-                pc: 1,
-                camera: 1,
-                mic: 1
-            },
-            equipmentCosts: {
-                pc: 100,
-                camera: 150,
-                mic: 120
-            }
-        };
-
-        const categories = ["Gaming", "Vlog", "Tech", "Music"];
-        let isStreaming = false;
-        let streamInterval;
-        let selectedCategory = null;
-
-        // --- INIT & UTILS ---
-
-        function formatNumber(num) {
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-            return Math.floor(num).toString();
+      {/* Styles for Animations & Mobile */}
+      <style>{`
+        @keyframes drop-coin {
+          0% { transform: translateY(-100vh) rotate(0deg); opacity: 0; }
+          20% { opacity: 1; }
+          80% { opacity: 1; }
+          100% { transform: translateY(20vh) rotate(720deg); opacity: 0; }
         }
-
-        function saveGame() {
-            localStorage.setItem('tubeTycoonSave', JSON.stringify(gameState));
+        .animate-drop-coin {
+          animation: drop-coin 0.8s ease-in forwards;
         }
-
-        function loadGame() {
-            const save = localStorage.getItem('tubeTycoonSave');
-            if (save) {
-                const parsed = JSON.parse(save);
-                Object.assign(gameState, parsed);
-                document.getElementById('welcomeModal').style.display = 'none';
-                updateUI();
-                renderVideoHistory();
-            }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-
-        function startGame() {
-            const nameInput = document.getElementById('channelNameInput').value;
-            if (nameInput.trim() !== "") {
-                gameState.name = nameInput;
-                document.getElementById('welcomeModal').style.display = 'none';
-                updateUI();
-                saveGame();
-            }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
         }
-
-        function showNotification(text, type = 'success') {
-            const container = document.getElementById('notificationArea');
-            const notif = document.createElement('div');
-            const colorClass = type === 'success' ? 'bg-green-500' : (type === 'error' ? 'bg-red-500' : 'bg-blue-500');
-            
-            notif.className = `${colorClass} text-white px-4 py-3 rounded shadow-lg text-sm font-bold flex items-center gap-2 transform transition-all duration-300 translate-x-full opacity-0`;
-            notif.innerHTML = `<i class="fa-solid fa-info-circle"></i> ${text}`;
-            
-            container.appendChild(notif);
-
-            // Animate in
-            setTimeout(() => {
-                notif.classList.remove('translate-x-full', 'opacity-0');
-            }, 10);
-
-            // Remove
-            setTimeout(() => {
-                notif.classList.add('translate-x-full', 'opacity-0');
-                setTimeout(() => notif.remove(), 300);
-            }, 3000);
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-
-        // --- CORE LOGIC ---
-
-        function updateUI() {
-            document.getElementById('channelNameDisplay').textContent = gameState.name;
-            document.getElementById('dayDisplay').textContent = gameState.day;
-            document.getElementById('subDisplay').textContent = formatNumber(gameState.subs);
-            document.getElementById('moneyDisplay').textContent = '$' + formatNumber(gameState.money);
-            document.getElementById('totalViewsDisplay').textContent = formatNumber(gameState.totalViews);
-            document.getElementById('videoCountDisplay').textContent = gameState.videos.length;
-            document.getElementById('trendDisplay').textContent = gameState.trend;
-            
-            // Energy Bar
-            const energyBar = document.getElementById('energyBar');
-            energyBar.style.width = `${gameState.energy}%`;
-            document.getElementById('energyText').textContent = `${Math.floor(gameState.energy)}%`;
-            if (gameState.energy < 20) {
-                energyBar.className = 'h-full bg-red-500 transition-all duration-500';
-            } else {
-                energyBar.className = 'h-full bg-blue-500 transition-all duration-500';
-            }
-
-            // Quality Badge logic
-            const eqAvg = (gameState.equipment.pc + gameState.equipment.camera) / 2;
-            let qualityText = "360p";
-            if (eqAvg > 2) qualityText = "720p";
-            if (eqAvg > 4) qualityText = "1080p";
-            if (eqAvg > 7) qualityText = "4K";
-            document.getElementById('qualityDisplay').textContent = qualityText;
-
-            // Shop Buttons
-            updateShopButtons();
+        .animate-fade-in-up {
+          animation: fade-in-up 0.4s ease-out forwards;
         }
-
-        function updateShopButtons() {
-            const updateBtn = (type, id) => {
-                const btn = document.getElementById(id);
-                const cost = gameState.equipmentCosts[type] * Math.pow(1.5, gameState.equipment[type]);
-                const level = gameState.equipment[type];
-                
-                // Fixed logic: ensures element exists before setting textContent
-                const levelDisplay = document.getElementById(`${type}Lvl`);
-                if (levelDisplay) {
-                    levelDisplay.textContent = `Lvl ${level}`;
-                }
-                
-                if (btn) {
-                    btn.innerHTML = `Upgrade $${Math.floor(cost)}`;
-                    if (gameState.money >= cost) {
-                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                    } else {
-                        btn.classList.add('opacity-50', 'cursor-not-allowed');
-                    }
-                }
-            };
-
-            updateBtn('pc', 'btn-pc');
-            updateBtn('camera', 'btn-camera');
-            updateBtn('mic', 'btn-mic');
-        }
-
-        function switchTab(tabId) {
-            if (isStreaming && tabId !== 'stream') {
-                showNotification("Cannot leave while streaming!", "error");
-                return;
-            }
-
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.nav-btn').forEach(el => {
-                el.classList.remove('text-red-600', 'bg-red-50', 'border-red-600');
-                el.classList.add('border-transparent');
-            });
-            
-            document.getElementById(tabId).classList.remove('hidden');
-            
-            // Highlight active nav
-            const navIndex = ['dashboard', 'create', 'stream', 'shop'].indexOf(tabId);
-            if (navIndex !== -1) {
-                const btn = document.querySelectorAll('.nav-btn')[navIndex];
-                btn.classList.add('text-red-600', 'bg-red-50', 'border-red-600');
-                btn.classList.remove('border-transparent');
-            }
-        }
-
-        function sleep() {
-            if (isStreaming) {
-                showNotification("End stream before sleeping!", "error");
-                return;
-            }
-
-            // Calculations
-            gameState.day++;
-            gameState.energy = 100;
-            
-            // Random Trend Change
-            gameState.trend = categories[Math.floor(Math.random() * categories.length)];
-            
-            // Passive income from old videos (small amount)
-            let passiveViews = 0;
-            gameState.videos.forEach(vid => {
-                passiveViews += Math.floor(vid.views * 0.05); // 5% decay growth
-            });
-            
-            if (passiveViews > 0) {
-                gameState.totalViews += passiveViews;
-                const passiveMoney = Math.floor(passiveViews * 0.001); // $1 per 1000 views
-                gameState.money += passiveMoney;
-                if(passiveMoney > 0) showNotification(`Overnight Earnings: $${passiveMoney}`, "info");
-            }
-
-            updateUI();
-            saveGame();
-            showNotification(`Day ${gameState.day} started! Trend: ${gameState.trend}`);
-        }
-
-        // --- VIDEO CREATION ---
-
-        function selectCategory(cat) {
-            selectedCategory = cat;
-            document.querySelectorAll('.cat-btn').forEach(btn => {
-                if (btn.textContent.includes(cat)) {
-                    btn.classList.add('border-red-600', 'bg-red-50');
-                    btn.classList.remove('border-transparent');
-                } else {
-                    btn.classList.remove('border-red-600', 'bg-red-50');
-                    btn.classList.add('border-transparent');
-                }
-            });
-        }
-
-        function publishVideo() {
-            if (!selectedCategory) {
-                showNotification("Select a topic first!", "error");
-                return;
-            }
-
-            const effort = parseInt(document.getElementById('editingEffort').value);
-            const energyCost = effort * 10;
-
-            if (gameState.energy < energyCost) {
-                showNotification("Not enough energy! Sleep to recover.", "error");
-                return;
-            }
-
-            gameState.energy -= energyCost;
-
-            // Algorithm Logic
-            const equipmentFactor = (gameState.equipment.pc + gameState.equipment.camera + gameState.equipment.mic);
-            let baseViews = Math.floor(Math.random() * 100) + (gameState.subs * 0.2) + (equipmentFactor * 50);
-            
-            // Trend Bonus
-            let trendMultiplier = 1;
-            if (selectedCategory === gameState.trend) {
-                trendMultiplier = 2;
-                showNotification("Trending Topic Bonus! (2x Views)", "success");
-            }
-
-            // Effort Bonus
-            const effortMultiplier = 1 + (effort * 0.2); // Up to 2x
-
-            // Final Calculation
-            const finalViews = Math.floor(baseViews * trendMultiplier * effortMultiplier);
-            const subGain = Math.floor(finalViews * 0.1 * (gameState.equipment.camera / 5)); // Better camera = more subs
-            const moneyGain = Math.floor(finalViews * 0.01); // $10 CPM approx
-
-            // Update State
-            gameState.subs += subGain;
-            gameState.totalViews += finalViews;
-            gameState.money += moneyGain;
-
-            const newVideo = {
-                title: `${selectedCategory} Video #${gameState.videos.length + 1}`,
-                category: selectedCategory,
-                views: finalViews,
-                subs: subGain,
-                money: moneyGain,
-                quality: (equipmentFactor / 3).toFixed(1)
-            };
-
-            gameState.videos.unshift(newVideo); // Add to front
-            
-            updateUI();
-            renderVideoHistory();
-            switchTab('dashboard');
-            saveGame();
-            
-            showNotification(`Video Uploaded! +${finalViews} Views`);
-            
-            // Reset selection
-            selectedCategory = null;
-            document.querySelectorAll('.cat-btn').forEach(btn => {
-                btn.classList.remove('border-red-600', 'bg-red-50');
-                btn.classList.add('border-transparent');
-            });
-        }
-
-        function renderVideoHistory() {
-            const container = document.getElementById('videoHistory');
-            container.innerHTML = '';
-
-            gameState.videos.slice(0, 5).forEach(vid => {
-                const el = document.createElement('div');
-                el.className = 'bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center';
-                el.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <div class="bg-gray-200 h-12 w-20 rounded flex items-center justify-center text-gray-500 text-xs font-bold">
-                            THUMB
-                        </div>
-                        <div>
-                            <div class="font-bold text-gray-800">${vid.title}</div>
-                            <div class="text-xs text-gray-500">${vid.category} • Quality: ${vid.quality}</div>
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="font-bold text-gray-700">${formatNumber(vid.views)} Views</div>
-                        <div class="text-xs text-green-600">+$${vid.money}</div>
-                    </div>
-                `;
-                container.appendChild(el);
-            });
-        }
-
-        // --- LIVESTREAM LOGIC ---
-
-        function startStream() {
-            if (gameState.energy < 20) {
-                showNotification("Too tired to stream! (Need 20% Energy)", "error");
-                return;
-            }
-
-            isStreaming = true;
-            document.getElementById('streamSetup').classList.add('hidden');
-            document.getElementById('streamActive').classList.remove('hidden');
-            document.getElementById('streamActive').classList.add('flex');
-            document.getElementById('chatBox').innerHTML = ''; // Clear chat
-
-            let currentViewers = Math.floor(gameState.subs * 0.05) + 5; // Base viewers
-
-            streamInterval = setInterval(() => {
-                // Drain Energy
-                gameState.energy -= 0.5;
-                
-                // End if exhausted
-                if (gameState.energy <= 0) {
-                    endStream();
-                    showNotification("Passed out from exhaustion!", "error");
-                    return;
-                }
-
-                // Viewer Fluctuation
-                currentViewers = Math.max(0, currentViewers + Math.floor(Math.random() * 5) - 2);
-                document.getElementById('liveViewers').textContent = formatNumber(currentViewers);
-
-                // Passive Gain
-                const tickMoney = Math.floor(currentViewers * 0.01);
-                if (tickMoney > 0) {
-                    gameState.money += tickMoney;
-                }
-                
-                // Random Chat
-                if (Math.random() > 0.7) addChatMessage();
-
-                updateUI();
-            }, 1000);
-        }
-
-        function endStream() {
-            isStreaming = false;
-            clearInterval(streamInterval);
-            document.getElementById('streamSetup').classList.remove('hidden');
-            document.getElementById('streamActive').classList.add('hidden');
-            document.getElementById('streamActive').classList.remove('flex');
-            saveGame();
-        }
-
-        function streamInteraction(type) {
-            if (!isStreaming) return;
-            
-            const popup = document.getElementById('streamMoneyPopup');
-            
-            // Manual Boost
-            if (type === 'chat') {
-                gameState.subs += Math.floor(Math.random() * 5) + 1;
-                showNotification("Interacted with chat! (+Subs)", "info");
-            } else if (type === 'game') {
-                const donation = Math.floor(Math.random() * 10) + 1;
-                gameState.money += donation;
-                
-                // Popup text effect
-                popup.textContent = `+$${donation}`;
-                popup.style.opacity = 1;
-                setTimeout(() => popup.style.opacity = 0, 800);
-            }
-            
-            gameState.energy -= 2; // Extra cost for actions
-            updateUI();
-        }
-
-        const chatNames = ["Gamer123", "CoolCat", "FanBoy", "Viewer99", "ProPlayer", "Mom", "Hater01"];
-        const chatMsgs = ["LOL", "Nice play!", "Notice me pls", "PogChamp", "Lag?", "Donated $5", "First!"];
-
-        function addChatMessage() {
-            const chatBox = document.getElementById('chatBox');
-            const name = chatNames[Math.floor(Math.random() * chatNames.length)];
-            const msg = chatMsgs[Math.floor(Math.random() * chatMsgs.length)];
-            
-            const div = document.createElement('div');
-            div.className = "chat-message text-xs mb-1";
-            div.innerHTML = `<span class="font-bold text-gray-700">${name}:</span> <span class="text-gray-600">${msg}</span>`;
-            
-            chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        // --- SHOP LOGIC ---
-
-        function buyUpgrade(type) {
-            const cost = gameState.equipmentCosts[type] * Math.pow(1.5, gameState.equipment[type]);
-            
-            if (gameState.money >= cost) {
-                gameState.money -= cost;
-                gameState.equipment[type]++;
-                updateUI();
-                saveGame();
-                showNotification(`Upgraded ${type}!`, "success");
-            } else {
-                showNotification("Not enough money!", "error");
-            }
-        }
-
-        // --- STARTUP ---
         
-        // Check for save on load
-        if (localStorage.getItem('tubeTycoonSave')) {
-            loadGame();
+        /* Mobile Slide Up Animation */
+        @keyframes slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        .slide-up-mobile {
+          animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-    </script>
-</body>
-</html>
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #cbd5e1;
+          border-radius: 20px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #475569;
+        }
+        
+        /* Prevent elastic scroll on body for app-feel */
+        body {
+          overscroll-behavior-y: none;
+        }
+        
+        /* Safe Area Spacing */
+        .safe-top {
+          padding-top: env(safe-area-inset-top, 16px);
+        }
+      `}</style>
+    </div>
+  );
+}
