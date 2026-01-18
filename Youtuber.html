@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TubeTycoon - YouTuber Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            user-select: none;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        .animate-pop {
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .chat-message {
+            animation: slideIn 0.2s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-10px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- TOP BAR -->
+    <header class="bg-white border-b border-gray-200 shadow-sm z-10 flex-none">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                    <i class="fa-brands fa-youtube"></i>
+                </div>
+                <div>
+                    <h1 id="channelNameDisplay" class="font-bold text-lg leading-tight">New Channel</h1>
+                    <div class="text-xs text-gray-500">Day <span id="dayDisplay">1</span></div>
+                </div>
+            </div>
+
+            <!-- Stats Header -->
+            <div class="flex gap-4 md:gap-8 text-sm md:text-base">
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-500 text-xs uppercase font-bold">Subs</span>
+                    <span id="subDisplay" class="font-bold text-red-600">0</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-500 text-xs uppercase font-bold">Money</span>
+                    <span id="moneyDisplay" class="font-bold text-green-600">$0</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-500 text-xs uppercase font-bold">Energy</span>
+                    <div class="w-24 h-4 bg-gray-200 rounded-full mt-1 overflow-hidden relative border border-gray-300">
+                        <div id="energyBar" class="h-full bg-blue-500 transition-all duration-500" style="width: 100%;"></div>
+                        <span id="energyText" class="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold shadow-black drop-shadow-md">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex overflow-hidden max-w-7xl mx-auto w-full">
+        
+        <!-- SIDEBAR NAVIGATION -->
+        <nav class="w-20 md:w-64 bg-white border-r border-gray-200 flex-none flex flex-col py-6 space-y-2">
+            <button onclick="switchTab('dashboard')" class="nav-btn active flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
+                <i class="fa-solid fa-chart-line text-xl group-hover:scale-110 transition-transform"></i>
+                <span class="hidden md:inline font-medium">Dashboard</span>
+            </button>
+            <button onclick="switchTab('create')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
+                <i class="fa-solid fa-video text-xl group-hover:scale-110 transition-transform"></i>
+                <span class="hidden md:inline font-medium">Create Video</span>
+            </button>
+            <button onclick="switchTab('stream')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
+                <i class="fa-solid fa-tower-broadcast text-xl group-hover:scale-110 transition-transform"></i>
+                <span class="hidden md:inline font-medium">Livestream</span>
+            </button>
+            <button onclick="switchTab('shop')" class="nav-btn flex items-center gap-4 px-6 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors border-r-4 border-transparent hover:border-red-600 group">
+                <i class="fa-solid fa-cart-shopping text-xl group-hover:scale-110 transition-transform"></i>
+                <span class="hidden md:inline font-medium">Shop</span>
+            </button>
+            
+            <div class="mt-auto px-6 pt-6 border-t border-gray-100">
+                <button onclick="sleep()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg shadow-md transition-transform active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-bed"></i>
+                    <span class="hidden md:inline">Sleep (Next Day)</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- CENTER PANEL -->
+        <section class="flex-1 bg-gray-50 p-4 md:p-8 overflow-y-auto relative" id="mainContainer">
+            
+            <!-- ALERTS -->
+            <div id="notificationArea" class="fixed top-20 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+            <!-- DASHBOARD TAB -->
+            <div id="dashboard" class="tab-content block animate-pop">
+                <div class="mb-6 bg-gradient-to-r from-red-500 to-pink-600 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
+                    <i class="fa-brands fa-youtube absolute -right-6 -bottom-6 text-9xl opacity-20"></i>
+                    <h2 class="text-2xl font-bold mb-1">Current Trend: <span id="trendDisplay" class="underline decoration-wavy decoration-white/50">Gaming</span></h2>
+                    <p class="text-white/80 text-sm">Create videos matching the trend for +50% views!</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Total Views</div>
+                        <div id="totalViewsDisplay" class="text-2xl font-bold text-gray-800">0</div>
+                    </div>
+                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Total Videos</div>
+                        <div id="videoCountDisplay" class="text-2xl font-bold text-gray-800">0</div>
+                    </div>
+                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div class="text-gray-400 text-sm font-semibold uppercase mb-1">Avg Quality</div>
+                        <div id="qualityDisplay" class="text-2xl font-bold text-blue-600">1080p</div>
+                    </div>
+                </div>
+
+                <h3 class="font-bold text-xl mb-4 text-gray-700">Recent Videos</h3>
+                <div id="videoHistory" class="space-y-3">
+                    <!-- Video items injected here -->
+                    <div class="text-center text-gray-400 py-10">No videos created yet.</div>
+                </div>
+            </div>
+
+            <!-- CREATE VIDEO TAB -->
+            <div id="create" class="tab-content hidden animate-pop">
+                <h2 class="text-2xl font-bold mb-6">Create New Content</h2>
+                
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 max-w-2xl mx-auto">
+                    <!-- Step 1: Category -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Select Topic</label>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <button onclick="selectCategory('Gaming')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
+                                <i class="fa-solid fa-gamepad text-2xl mb-2 text-gray-600"></i>
+                                <div class="text-sm font-medium">Gaming</div>
+                            </button>
+                            <button onclick="selectCategory('Vlog')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
+                                <i class="fa-solid fa-camera text-2xl mb-2 text-gray-600"></i>
+                                <div class="text-sm font-medium">Vlog</div>
+                            </button>
+                            <button onclick="selectCategory('Tech')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
+                                <i class="fa-solid fa-microchip text-2xl mb-2 text-gray-600"></i>
+                                <div class="text-sm font-medium">Tech</div>
+                            </button>
+                            <button onclick="selectCategory('Music')" class="cat-btn bg-gray-100 hover:bg-red-100 border-2 border-transparent hover:border-red-500 p-3 rounded-lg transition-all text-center">
+                                <i class="fa-solid fa-music text-2xl mb-2 text-gray-600"></i>
+                                <div class="text-sm font-medium">Music</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Editing Effort -->
+                    <div class="mb-8">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Editing Effort (Costs Energy)</label>
+                        <input type="range" id="editingEffort" min="1" max="5" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600">
+                        <div class="flex justify-between text-xs text-gray-500 mt-2">
+                            <span>Quick Cut (10 Energy)</span>
+                            <span>Masterpiece (50 Energy)</span>
+                        </div>
+                    </div>
+
+                    <button onclick="publishVideo()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-lg flex items-center justify-center gap-3">
+                        <i class="fa-solid fa-upload"></i> Upload Video
+                    </button>
+                </div>
+            </div>
+
+            <!-- STREAM TAB -->
+            <div id="stream" class="tab-content hidden animate-pop h-full flex flex-col">
+                <div id="streamSetup" class="flex flex-col items-center justify-center h-full">
+                    <div class="text-center max-w-md">
+                        <div class="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-2">Ready to go Live?</h2>
+                        <p class="text-gray-500 mb-8">Streaming drains energy continuously but earns money and subscribers in real-time. Don't let your energy hit 0!</p>
+                        <button onclick="startStream()" class="px-8 py-3 bg-red-600 text-white rounded-full font-bold shadow-lg hover:bg-red-700 transition-transform hover:scale-105">
+                            Start Stream
+                        </button>
+                    </div>
+                </div>
+
+                <div id="streamActive" class="hidden h-full flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl relative border-4 border-gray-800">
+                    <!-- Stream Screen -->
+                    <div class="flex-1 bg-gray-800 relative flex items-center justify-center">
+                        <div class="absolute top-4 left-4 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded animate-pulse">LIVE</div>
+                        <div class="absolute top-4 right-4 bg-black/50 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-2">
+                            <i class="fa-regular fa-eye"></i> <span id="liveViewers">0</span>
+                        </div>
+                        
+                        <div class="text-center">
+                            <i class="fa-solid fa-gamepad text-6xl text-gray-700 mb-4"></i>
+                            <div class="text-gray-500 text-sm">Streaming Gameplay...</div>
+                            <div id="streamMoneyPopup" class="text-green-400 font-bold text-xl h-8"></div>
+                        </div>
+
+                        <!-- Stream Controls -->
+                        <div class="absolute bottom-6 left-0 right-0 flex justify-center gap-4">
+                            <button onclick="streamInteraction('chat')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md transition-transform active:scale-95">Read Chat</button>
+                            <button onclick="streamInteraction('game')" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-md transition-transform active:scale-95">Focus Game</button>
+                            <button onclick="endStream()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-full text-sm font-bold shadow-md">End Stream</button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Box -->
+                    <div class="h-48 bg-white flex flex-col">
+                        <div class="p-2 border-b text-xs font-bold text-gray-500 bg-gray-50">TOP CHAT</div>
+                        <div id="chatBox" class="flex-1 overflow-y-auto p-2 space-y-2 text-sm">
+                            <!-- Chat messages -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHOP TAB -->
+            <div id="shop" class="tab-content hidden animate-pop">
+                <h2 class="text-2xl font-bold mb-6">Equipment Shop</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    <!-- PC Upgrade -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="p-3 bg-blue-100 text-blue-600 rounded-lg">
+                                <i class="fa-solid fa-computer text-xl"></i>
+                            </div>
+                            <span id="pcLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
+                        </div>
+                        <h3 class="font-bold text-lg">Workstation</h3>
+                        <p class="text-sm text-gray-500 mb-4">Improves editing speed and video base quality.</p>
+                        <button onclick="buyUpgrade('pc')" id="btn-pc" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
+                            Buy $<span>100</span>
+                        </button>
+                    </div>
+
+                    <!-- Camera Upgrade -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="p-3 bg-green-100 text-green-600 rounded-lg">
+                                <i class="fa-solid fa-camera text-xl"></i>
+                            </div>
+                            <!-- FIXED ID HERE: changed from camLvl to cameraLvl -->
+                            <span id="cameraLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
+                        </div>
+                        <h3 class="font-bold text-lg">Camera</h3>
+                        <p class="text-sm text-gray-500 mb-4">Increases subscriber gain rate per video.</p>
+                        <button onclick="buyUpgrade('camera')" id="btn-camera" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
+                            Buy $<span>150</span>
+                        </button>
+                    </div>
+
+                    <!-- Mic Upgrade -->
+                    <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="p-3 bg-purple-100 text-purple-600 rounded-lg">
+                                <i class="fa-solid fa-microphone text-xl"></i>
+                            </div>
+                            <span id="micLvl" class="text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-500">Lvl 1</span>
+                        </div>
+                        <h3 class="font-bold text-lg">Microphone</h3>
+                        <p class="text-sm text-gray-500 mb-4">Boosts audience retention and likes.</p>
+                        <button onclick="buyUpgrade('mic')" id="btn-mic" class="mt-auto w-full py-2 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
+                            Buy $<span>120</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                    <i class="fa-solid fa-lightbulb mr-2"></i> Tip: Upgrading equipment increases your upkeep costs but drastically improves your video performance!
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Modal for Welcome/Name Input -->
+    <div id="welcomeModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
+        <div class="bg-white p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
+            <i class="fa-brands fa-youtube text-6xl text-red-600 mb-4"></i>
+            <h2 class="text-3xl font-bold mb-2">Start Your Career</h2>
+            <p class="text-gray-500 mb-6">What will your channel be called?</p>
+            <input type="text" id="channelNameInput" placeholder="Enter Channel Name..." class="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 text-center text-lg font-semibold focus:border-red-500 outline-none" maxlength="20">
+            <button onclick="startGame()" class="w-full bg-red-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-red-700 transition-colors">Create Channel</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME STATE ---
+        const gameState = {
+            name: "New Channel",
+            day: 1,
+            money: 100,
+            subs: 0,
+            totalViews: 0,
+            energy: 100,
+            videos: [],
+            trend: "Gaming",
+            equipment: {
+                pc: 1,
+                camera: 1,
+                mic: 1
+            },
+            equipmentCosts: {
+                pc: 100,
+                camera: 150,
+                mic: 120
+            }
+        };
+
+        const categories = ["Gaming", "Vlog", "Tech", "Music"];
+        let isStreaming = false;
+        let streamInterval;
+        let selectedCategory = null;
+
+        // --- INIT & UTILS ---
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return Math.floor(num).toString();
+        }
+
+        function saveGame() {
+            localStorage.setItem('tubeTycoonSave', JSON.stringify(gameState));
+        }
+
+        function loadGame() {
+            const save = localStorage.getItem('tubeTycoonSave');
+            if (save) {
+                const parsed = JSON.parse(save);
+                Object.assign(gameState, parsed);
+                document.getElementById('welcomeModal').style.display = 'none';
+                updateUI();
+                renderVideoHistory();
+            }
+        }
+
+        function startGame() {
+            const nameInput = document.getElementById('channelNameInput').value;
+            if (nameInput.trim() !== "") {
+                gameState.name = nameInput;
+                document.getElementById('welcomeModal').style.display = 'none';
+                updateUI();
+                saveGame();
+            }
+        }
+
+        function showNotification(text, type = 'success') {
+            const container = document.getElementById('notificationArea');
+            const notif = document.createElement('div');
+            const colorClass = type === 'success' ? 'bg-green-500' : (type === 'error' ? 'bg-red-500' : 'bg-blue-500');
+            
+            notif.className = `${colorClass} text-white px-4 py-3 rounded shadow-lg text-sm font-bold flex items-center gap-2 transform transition-all duration-300 translate-x-full opacity-0`;
+            notif.innerHTML = `<i class="fa-solid fa-info-circle"></i> ${text}`;
+            
+            container.appendChild(notif);
+
+            // Animate in
+            setTimeout(() => {
+                notif.classList.remove('translate-x-full', 'opacity-0');
+            }, 10);
+
+            // Remove
+            setTimeout(() => {
+                notif.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => notif.remove(), 300);
+            }, 3000);
+        }
+
+        // --- CORE LOGIC ---
+
+        function updateUI() {
+            document.getElementById('channelNameDisplay').textContent = gameState.name;
+            document.getElementById('dayDisplay').textContent = gameState.day;
+            document.getElementById('subDisplay').textContent = formatNumber(gameState.subs);
+            document.getElementById('moneyDisplay').textContent = '$' + formatNumber(gameState.money);
+            document.getElementById('totalViewsDisplay').textContent = formatNumber(gameState.totalViews);
+            document.getElementById('videoCountDisplay').textContent = gameState.videos.length;
+            document.getElementById('trendDisplay').textContent = gameState.trend;
+            
+            // Energy Bar
+            const energyBar = document.getElementById('energyBar');
+            energyBar.style.width = `${gameState.energy}%`;
+            document.getElementById('energyText').textContent = `${Math.floor(gameState.energy)}%`;
+            if (gameState.energy < 20) {
+                energyBar.className = 'h-full bg-red-500 transition-all duration-500';
+            } else {
+                energyBar.className = 'h-full bg-blue-500 transition-all duration-500';
+            }
+
+            // Quality Badge logic
+            const eqAvg = (gameState.equipment.pc + gameState.equipment.camera) / 2;
+            let qualityText = "360p";
+            if (eqAvg > 2) qualityText = "720p";
+            if (eqAvg > 4) qualityText = "1080p";
+            if (eqAvg > 7) qualityText = "4K";
+            document.getElementById('qualityDisplay').textContent = qualityText;
+
+            // Shop Buttons
+            updateShopButtons();
+        }
+
+        function updateShopButtons() {
+            const updateBtn = (type, id) => {
+                const btn = document.getElementById(id);
+                const cost = gameState.equipmentCosts[type] * Math.pow(1.5, gameState.equipment[type]);
+                const level = gameState.equipment[type];
+                
+                // Fixed logic: ensures element exists before setting textContent
+                const levelDisplay = document.getElementById(`${type}Lvl`);
+                if (levelDisplay) {
+                    levelDisplay.textContent = `Lvl ${level}`;
+                }
+                
+                if (btn) {
+                    btn.innerHTML = `Upgrade $${Math.floor(cost)}`;
+                    if (gameState.money >= cost) {
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+            };
+
+            updateBtn('pc', 'btn-pc');
+            updateBtn('camera', 'btn-camera');
+            updateBtn('mic', 'btn-mic');
+        }
+
+        function switchTab(tabId) {
+            if (isStreaming && tabId !== 'stream') {
+                showNotification("Cannot leave while streaming!", "error");
+                return;
+            }
+
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('text-red-600', 'bg-red-50', 'border-red-600');
+                el.classList.add('border-transparent');
+            });
+            
+            document.getElementById(tabId).classList.remove('hidden');
+            
+            // Highlight active nav
+            const navIndex = ['dashboard', 'create', 'stream', 'shop'].indexOf(tabId);
+            if (navIndex !== -1) {
+                const btn = document.querySelectorAll('.nav-btn')[navIndex];
+                btn.classList.add('text-red-600', 'bg-red-50', 'border-red-600');
+                btn.classList.remove('border-transparent');
+            }
+        }
+
+        function sleep() {
+            if (isStreaming) {
+                showNotification("End stream before sleeping!", "error");
+                return;
+            }
+
+            // Calculations
+            gameState.day++;
+            gameState.energy = 100;
+            
+            // Random Trend Change
+            gameState.trend = categories[Math.floor(Math.random() * categories.length)];
+            
+            // Passive income from old videos (small amount)
+            let passiveViews = 0;
+            gameState.videos.forEach(vid => {
+                passiveViews += Math.floor(vid.views * 0.05); // 5% decay growth
+            });
+            
+            if (passiveViews > 0) {
+                gameState.totalViews += passiveViews;
+                const passiveMoney = Math.floor(passiveViews * 0.001); // $1 per 1000 views
+                gameState.money += passiveMoney;
+                if(passiveMoney > 0) showNotification(`Overnight Earnings: $${passiveMoney}`, "info");
+            }
+
+            updateUI();
+            saveGame();
+            showNotification(`Day ${gameState.day} started! Trend: ${gameState.trend}`);
+        }
+
+        // --- VIDEO CREATION ---
+
+        function selectCategory(cat) {
+            selectedCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if (btn.textContent.includes(cat)) {
+                    btn.classList.add('border-red-600', 'bg-red-50');
+                    btn.classList.remove('border-transparent');
+                } else {
+                    btn.classList.remove('border-red-600', 'bg-red-50');
+                    btn.classList.add('border-transparent');
+                }
+            });
+        }
+
+        function publishVideo() {
+            if (!selectedCategory) {
+                showNotification("Select a topic first!", "error");
+                return;
+            }
+
+            const effort = parseInt(document.getElementById('editingEffort').value);
+            const energyCost = effort * 10;
+
+            if (gameState.energy < energyCost) {
+                showNotification("Not enough energy! Sleep to recover.", "error");
+                return;
+            }
+
+            gameState.energy -= energyCost;
+
+            // Algorithm Logic
+            const equipmentFactor = (gameState.equipment.pc + gameState.equipment.camera + gameState.equipment.mic);
+            let baseViews = Math.floor(Math.random() * 100) + (gameState.subs * 0.2) + (equipmentFactor * 50);
+            
+            // Trend Bonus
+            let trendMultiplier = 1;
+            if (selectedCategory === gameState.trend) {
+                trendMultiplier = 2;
+                showNotification("Trending Topic Bonus! (2x Views)", "success");
+            }
+
+            // Effort Bonus
+            const effortMultiplier = 1 + (effort * 0.2); // Up to 2x
+
+            // Final Calculation
+            const finalViews = Math.floor(baseViews * trendMultiplier * effortMultiplier);
+            const subGain = Math.floor(finalViews * 0.1 * (gameState.equipment.camera / 5)); // Better camera = more subs
+            const moneyGain = Math.floor(finalViews * 0.01); // $10 CPM approx
+
+            // Update State
+            gameState.subs += subGain;
+            gameState.totalViews += finalViews;
+            gameState.money += moneyGain;
+
+            const newVideo = {
+                title: `${selectedCategory} Video #${gameState.videos.length + 1}`,
+                category: selectedCategory,
+                views: finalViews,
+                subs: subGain,
+                money: moneyGain,
+                quality: (equipmentFactor / 3).toFixed(1)
+            };
+
+            gameState.videos.unshift(newVideo); // Add to front
+            
+            updateUI();
+            renderVideoHistory();
+            switchTab('dashboard');
+            saveGame();
+            
+            showNotification(`Video Uploaded! +${finalViews} Views`);
+            
+            // Reset selection
+            selectedCategory = null;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.classList.remove('border-red-600', 'bg-red-50');
+                btn.classList.add('border-transparent');
+            });
+        }
+
+        function renderVideoHistory() {
+            const container = document.getElementById('videoHistory');
+            container.innerHTML = '';
+
+            gameState.videos.slice(0, 5).forEach(vid => {
+                const el = document.createElement('div');
+                el.className = 'bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex justify-between items-center';
+                el.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="bg-gray-200 h-12 w-20 rounded flex items-center justify-center text-gray-500 text-xs font-bold">
+                            THUMB
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-800">${vid.title}</div>
+                            <div class="text-xs text-gray-500">${vid.category} • Quality: ${vid.quality}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-gray-700">${formatNumber(vid.views)} Views</div>
+                        <div class="text-xs text-green-600">+$${vid.money}</div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        }
+
+        // --- LIVESTREAM LOGIC ---
+
+        function startStream() {
+            if (gameState.energy < 20) {
+                showNotification("Too tired to stream! (Need 20% Energy)", "error");
+                return;
+            }
+
+            isStreaming = true;
+            document.getElementById('streamSetup').classList.add('hidden');
+            document.getElementById('streamActive').classList.remove('hidden');
+            document.getElementById('streamActive').classList.add('flex');
+            document.getElementById('chatBox').innerHTML = ''; // Clear chat
+
+            let currentViewers = Math.floor(gameState.subs * 0.05) + 5; // Base viewers
+
+            streamInterval = setInterval(() => {
+                // Drain Energy
+                gameState.energy -= 0.5;
+                
+                // End if exhausted
+                if (gameState.energy <= 0) {
+                    endStream();
+                    showNotification("Passed out from exhaustion!", "error");
+                    return;
+                }
+
+                // Viewer Fluctuation
+                currentViewers = Math.max(0, currentViewers + Math.floor(Math.random() * 5) - 2);
+                document.getElementById('liveViewers').textContent = formatNumber(currentViewers);
+
+                // Passive Gain
+                const tickMoney = Math.floor(currentViewers * 0.01);
+                if (tickMoney > 0) {
+                    gameState.money += tickMoney;
+                }
+                
+                // Random Chat
+                if (Math.random() > 0.7) addChatMessage();
+
+                updateUI();
+            }, 1000);
+        }
+
+        function endStream() {
+            isStreaming = false;
+            clearInterval(streamInterval);
+            document.getElementById('streamSetup').classList.remove('hidden');
+            document.getElementById('streamActive').classList.add('hidden');
+            document.getElementById('streamActive').classList.remove('flex');
+            saveGame();
+        }
+
+        function streamInteraction(type) {
+            if (!isStreaming) return;
+            
+            const popup = document.getElementById('streamMoneyPopup');
+            
+            // Manual Boost
+            if (type === 'chat') {
+                gameState.subs += Math.floor(Math.random() * 5) + 1;
+                showNotification("Interacted with chat! (+Subs)", "info");
+            } else if (type === 'game') {
+                const donation = Math.floor(Math.random() * 10) + 1;
+                gameState.money += donation;
+                
+                // Popup text effect
+                popup.textContent = `+$${donation}`;
+                popup.style.opacity = 1;
+                setTimeout(() => popup.style.opacity = 0, 800);
+            }
+            
+            gameState.energy -= 2; // Extra cost for actions
+            updateUI();
+        }
+
+        const chatNames = ["Gamer123", "CoolCat", "FanBoy", "Viewer99", "ProPlayer", "Mom", "Hater01"];
+        const chatMsgs = ["LOL", "Nice play!", "Notice me pls", "PogChamp", "Lag?", "Donated $5", "First!"];
+
+        function addChatMessage() {
+            const chatBox = document.getElementById('chatBox');
+            const name = chatNames[Math.floor(Math.random() * chatNames.length)];
+            const msg = chatMsgs[Math.floor(Math.random() * chatMsgs.length)];
+            
+            const div = document.createElement('div');
+            div.className = "chat-message text-xs mb-1";
+            div.innerHTML = `<span class="font-bold text-gray-700">${name}:</span> <span class="text-gray-600">${msg}</span>`;
+            
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // --- SHOP LOGIC ---
+
+        function buyUpgrade(type) {
+            const cost = gameState.equipmentCosts[type] * Math.pow(1.5, gameState.equipment[type]);
+            
+            if (gameState.money >= cost) {
+                gameState.money -= cost;
+                gameState.equipment[type]++;
+                updateUI();
+                saveGame();
+                showNotification(`Upgraded ${type}!`, "success");
+            } else {
+                showNotification("Not enough money!", "error");
+            }
+        }
+
+        // --- STARTUP ---
+        
+        // Check for save on load
+        if (localStorage.getItem('tubeTycoonSave')) {
+            loadGame();
+        }
+
+    </script>
+</body>
+</html>
